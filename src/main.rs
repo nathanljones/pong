@@ -45,7 +45,7 @@ fn spawn_ball(
     println!("Spawning ball...");
 
     let shape = Mesh::from(Circle::new(BALL_SIZE));
-    let color = ColorMaterial::from(Color::rgb(1., 0., 0.));
+    let color = ColorMaterial::from(Color::srgb(1., 0., 0.));
 
     // `Assets::add` will load these into memory and return a
     // `Handle` (an ID) to these assets. When all references
