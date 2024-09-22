@@ -31,6 +31,12 @@ struct Velocity(Vec2);
 struct Shape(Vec2);
 
 #[derive(Component)]
+struct Player;
+
+#[derive(Component)]
+struct Ai;
+
+#[derive(Component)]
 struct Ball;
 
 #[derive(Bundle)]
@@ -99,11 +105,13 @@ fn main() {
         .add_systems(Startup, spawn_paddles)
         .add_systems(Startup, spawn_gutters)
         .add_systems(Update, move_ball)
+        .add_systems(Update, handle_player_input)
         // Add our projection system to run after
         // we move our ball so we are not reading
         // movement one frame behind
         .add_systems(Update, project_positions.after(move_ball))
         .add_systems(Update, handle_collisions.after(move_ball))
+        .add_systems(Update, move_paddles.after(handle_player_input))
         .run();
 }
 
@@ -165,15 +173,14 @@ fn spawn_paddles(
         let padding = 50.;
         let right_paddle_x = window_width / 2. - padding;
         let left_paddle_x = -window_width / 2. + padding;
-        let player = PaddleBundle::new(right_paddle_x, 0.);
-        let ai = PaddleBundle::new(left_paddle_x, 0.);
 
         let mesh = Mesh::from(Rectangle::new(PADDLE_WIDTH, PADDLE_HEIGHT));
 
         let mesh_handle = meshes.add(mesh);
 
         commands.spawn((
-            player,
+            Player,
+            PaddleBundle::new(right_paddle_x, 0.),
             MaterialMesh2dBundle {
                 mesh: mesh_handle.clone().into(),
                 material: materials.add(ColorMaterial::from(Color::srgb(0., 1., 0.))),
@@ -182,7 +189,8 @@ fn spawn_paddles(
         ));
 
         commands.spawn((
-            ai,
+            Ai,
+            PaddleBundle::new(left_paddle_x, 0.),
             MaterialMesh2dBundle {
                 mesh: mesh_handle.into(),
                 material: materials.add(ColorMaterial::from(Color::srgb(0., 0., 1.))),
@@ -287,5 +295,35 @@ fn spawn_gutters(
                 ..default()
             },
         ));
+    }
+}
+fn handle_player_input(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut paddle: Query<&mut Velocity, With<Player>>,
+) {
+    if let Ok(mut velocity) = paddle.get_single_mut() {
+        if keyboard_input.pressed(KeyCode::ArrowUp) {
+            velocity.0.y = 1.;
+        } else if keyboard_input.pressed(KeyCode::ArrowDown) {
+            velocity.0.y = -1.;
+        } else {
+            velocity.0.y = 0.;
+        }
+    }
+}
+fn move_paddles(
+    mut paddle: Query<(&mut Position, &Velocity), With<Paddle>>,
+    window: Query<&Window>,
+) {
+    if let Ok(window) = window.get_single() {
+        let window_height = window.resolution.height();
+        let max_y = window_height / 2. - GUTTER_HEIGHT - PADDLE_HEIGHT / 2.;
+
+        for (mut position, velocity) in &mut paddle {
+            let new_position = position.0 + velocity.0 * PADDLE_SPEED;
+            if new_position.y.abs() < max_y {
+                position.0 = new_position;
+            }
+        }
     }
 }
