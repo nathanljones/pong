@@ -8,6 +8,8 @@ const PADDLE_SPEED: f32 = 1.;
 const PADDLE_WIDTH: f32 = 10.;
 const PADDLE_HEIGHT: f32 = 50.;
 
+const GUTTER_HEIGHT: f32 = 20.;
+
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum Collision {
     Left,
@@ -72,12 +74,30 @@ impl PaddleBundle {
     }
 }
 
+#[derive(Component)]
+struct Gutter;
+#[derive(Bundle)]
+struct GutterBundle {
+    gutter: Gutter,
+    shape: Shape,
+    position: Position,
+}
+impl GutterBundle {
+    fn new(x: f32, y: f32, width: f32) -> Self {
+        Self {
+            gutter: Gutter,
+            shape: Shape(Vec2::new(width, GUTTER_HEIGHT)),
+            position: Position(Vec2::new(x, y)),
+        }
+    }
+}
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, spawn_ball)
         .add_systems(Startup, spawn_camera)
         .add_systems(Startup, spawn_paddles)
+        .add_systems(Startup, spawn_gutters)
         .add_systems(Update, move_ball)
         // Add our projection system to run after
         // we move our ball so we are not reading
@@ -107,7 +127,7 @@ fn spawn_ball(
     // followed by an `insert`. They mean the same thing,
     // letting us spawn many components on a new entity at once.
     commands.spawn((
-        BallBundle::new(1., 0.),
+        BallBundle::new(1., 1.),
         MaterialMesh2dBundle {
             mesh: mesh_handle.into(),
             material: material_handle,
@@ -145,13 +165,15 @@ fn spawn_paddles(
         let padding = 50.;
         let right_paddle_x = window_width / 2. - padding;
         let left_paddle_x = -window_width / 2. + padding;
+        let player = PaddleBundle::new(right_paddle_x, 0.);
+        let ai = PaddleBundle::new(left_paddle_x, 0.);
 
         let mesh = Mesh::from(Rectangle::new(PADDLE_WIDTH, PADDLE_HEIGHT));
 
         let mesh_handle = meshes.add(mesh);
 
         commands.spawn((
-            PaddleBundle::new(right_paddle_x, 0.),
+            player,
             MaterialMesh2dBundle {
                 mesh: mesh_handle.clone().into(),
                 material: materials.add(ColorMaterial::from(Color::srgb(0., 1., 0.))),
@@ -160,7 +182,7 @@ fn spawn_paddles(
         ));
 
         commands.spawn((
-            PaddleBundle::new(left_paddle_x, 0.),
+            ai,
             MaterialMesh2dBundle {
                 mesh: mesh_handle.into(),
                 material: materials.add(ColorMaterial::from(Color::srgb(0., 0., 1.))),
@@ -220,5 +242,50 @@ fn handle_collisions(
                 }
             }
         }
+    }
+}
+fn spawn_gutters(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    window: Query<&Window>,
+) {
+    if let Ok(window) = window.get_single() {
+        let window_width = window.resolution.width();
+        let window_height = window.resolution.height();
+
+        // We take half the window height because the center of our screen
+        // is (0, 0). The padding would be half the height of the gutter as its
+        // origin is also center rather than top left
+        let top_gutter_y = window_height / 2. - GUTTER_HEIGHT / 2.;
+        let bottom_gutter_y = -window_height / 2. + GUTTER_HEIGHT / 2.;
+
+        let top_gutter = GutterBundle::new(0., top_gutter_y, window_width);
+        let bottom_gutter = GutterBundle::new(0., bottom_gutter_y, window_width);
+
+        let mesh = Mesh::from(Rectangle::from_size(top_gutter.shape.0));
+        let material = ColorMaterial::from(Color::rgb(0., 0., 0.));
+
+        // We can share these meshes between our gutters by cloning them
+        let mesh_handle = meshes.add(mesh);
+        let material_handle = materials.add(material);
+
+        commands.spawn((
+            top_gutter,
+            MaterialMesh2dBundle {
+                mesh: mesh_handle.clone().into(),
+                material: material_handle.clone(),
+                ..default()
+            },
+        ));
+
+        commands.spawn((
+            bottom_gutter,
+            MaterialMesh2dBundle {
+                mesh: mesh_handle.into(),
+                material: material_handle.clone(),
+                ..default()
+            },
+        ));
     }
 }
