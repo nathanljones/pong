@@ -17,6 +17,19 @@ enum Collision {
     Top,
     Bottom,
 }
+enum Scorer {
+    Ai,
+    Player,
+}
+
+#[derive(Event)]
+struct Scored(Scorer);
+
+#[derive(Resource, Default)]
+struct Score {
+    player: u32,
+    ai: u32,
+}
 
 #[derive(Component)]
 struct Position(Vec2);
@@ -100,12 +113,17 @@ impl GutterBundle {
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .init_resource::<Score>()
+        .add_event::<Scored>()
         .add_systems(Startup, spawn_ball)
         .add_systems(Startup, spawn_camera)
         .add_systems(Startup, spawn_paddles)
         .add_systems(Startup, spawn_gutters)
         .add_systems(Update, move_ball)
         .add_systems(Update, handle_player_input)
+        .add_systems(Update, detect_scoring)
+        .add_systems(Update, reset_ball.after(detect_scoring))
+        .add_systems(Update, update_score.after(detect_scoring))
         // Add our projection system to run after
         // we move our ball so we are not reading
         // movement one frame behind
@@ -147,8 +165,8 @@ fn spawn_camera(mut commands: Commands) {
     commands.spawn_empty().insert(Camera2dBundle::default());
 }
 
-fn project_positions(mut ball: Query<(&mut Transform, &Position)>) {
-    for (mut transform, position) in &mut ball {
+fn project_positions(mut positionable: Query<(&mut Transform, &Position)>) {
+    for (mut transform, position) in &mut positionable {
         transform.translation = position.0.extend(0.);
     }
 }
@@ -272,7 +290,7 @@ fn spawn_gutters(
         let bottom_gutter = GutterBundle::new(0., bottom_gutter_y, window_width);
 
         let mesh = Mesh::from(Rectangle::from_size(top_gutter.shape.0));
-        let material = ColorMaterial::from(Color::rgb(0., 0., 0.));
+        let material = ColorMaterial::from(Color::srgb(0., 0., 0.));
 
         // We can share these meshes between our gutters by cloning them
         let mesh_handle = meshes.add(mesh);
@@ -326,4 +344,52 @@ fn move_paddles(
             }
         }
     }
+}
+fn detect_scoring(
+    mut ball: Query<&mut Position, With<Ball>>,
+    window: Query<&Window>,
+    mut events: EventWriter<Scored>,
+) {
+    if let Ok(window) = window.get_single() {
+        let window_width = window.resolution.width();
+
+        if let Ok(ball) = ball.get_single_mut() {
+            // Here we write the events using our EventWriter
+            if ball.0.x > window_width / 2. {
+                events.send(Scored(Scorer::Ai));
+            } else if ball.0.x < -window_width / 2. {
+                events.send(Scored(Scorer::Player));
+            }
+        }
+    }
+}
+fn reset_ball(
+    mut ball: Query<(&mut Position, &mut Velocity), With<Ball>>,
+    mut events: EventReader<Scored>,
+) {
+    for event in events.read() {
+        if let Ok((mut position, mut velocity)) = ball.get_single_mut() {
+            match event.0 {
+                Scorer::Ai => {
+                    position.0 = Vec2::new(0., 0.);
+                    velocity.0 = Vec2::new(-1., 1.);
+                }
+                Scorer::Player => {
+                    position.0 = Vec2::new(0., 0.);
+                    velocity.0 = Vec2::new(1., 1.);
+                }
+            }
+        }
+    }
+}
+
+fn update_score(mut score: ResMut<Score>, mut events: EventReader<Scored>) {
+    for event in events.read() {
+        match event.0 {
+            Scorer::Ai => score.ai += 1,
+            Scorer::Player => score.player += 1,
+        }
+    }
+
+    println!("Score: {} - {}", score.player, score.ai);
 }
