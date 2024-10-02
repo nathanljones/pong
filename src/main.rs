@@ -30,6 +30,11 @@ struct Score {
     player: u32,
     ai: u32,
 }
+#[derive(Component)]
+struct PlayerScore;
+
+#[derive(Component)]
+struct AiScore;
 
 #[derive(Component)]
 struct Position(Vec2);
@@ -119,6 +124,7 @@ fn main() {
         .add_systems(Startup, spawn_camera)
         .add_systems(Startup, spawn_paddles)
         .add_systems(Startup, spawn_gutters)
+        .add_systems(Startup, spawn_scoreboard)
         .add_systems(Update, move_ball)
         .add_systems(Update, handle_player_input)
         .add_systems(Update, detect_scoring)
@@ -130,6 +136,7 @@ fn main() {
         .add_systems(Update, project_positions.after(move_ball))
         .add_systems(Update, handle_collisions.after(move_ball))
         .add_systems(Update, move_paddles.after(handle_player_input))
+        .add_systems(Update, update_scoreboard.after(update_score))
         .run();
 }
 
@@ -392,4 +399,66 @@ fn update_score(mut score: ResMut<Score>, mut events: EventReader<Scored>) {
     }
 
     println!("Score: {} - {}", score.player, score.ai);
+}
+
+fn update_scoreboard(
+    mut player_score: Query<&mut Text, With<PlayerScore>>,
+    mut ai_score: Query<&mut Text, (With<AiScore>, Without<PlayerScore>)>,
+    score: Res<Score>,
+) {
+    if score.is_changed() {
+        if let Ok(mut player_score) = player_score.get_single_mut() {
+            player_score.sections[0].value = score.player.to_string();
+        }
+
+        if let Ok(mut ai_score) = ai_score.get_single_mut() {
+            ai_score.sections[0].value = score.ai.to_string();
+        }
+    }
+}
+
+fn spawn_scoreboard(mut commands: Commands) {
+    commands.spawn((
+        // Create a TextBundle that has a Text with a
+        // single section.
+        TextBundle::from_section(
+            // Accepts a `String` or any type that converts
+            // into a `String`, such as `&str`
+            "0",
+            TextStyle {
+                font_size: 72.0,
+                color: Color::WHITE,
+                ..default()
+            },
+        ) // Set the alignment of the Text
+        .with_text_justify(JustifyText::Center)
+        // Set the style of the TextBundle itself.
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(5.0),
+            right: Val::Px(15.0),
+            ..default()
+        }),
+        PlayerScore,
+    ));
+
+    // Then we do it again for the AI score
+    commands.spawn((
+        TextBundle::from_section(
+            "0",
+            TextStyle {
+                font_size: 72.0,
+                color: Color::WHITE,
+                ..default()
+            },
+        )
+        .with_text_justify(JustifyText::Center)
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(5.0),
+            left: Val::Px(15.0),
+            ..default()
+        }),
+        AiScore,
+    ));
 }
