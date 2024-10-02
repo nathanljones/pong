@@ -30,6 +30,7 @@ struct Score {
     player: u32,
     ai: u32,
 }
+
 #[derive(Component)]
 struct PlayerScore;
 
@@ -128,6 +129,7 @@ fn main() {
         .add_systems(Update, move_ball)
         .add_systems(Update, handle_player_input)
         .add_systems(Update, detect_scoring)
+        .add_systems(Update, move_ai)
         .add_systems(Update, reset_ball.after(detect_scoring))
         .add_systems(Update, update_score.after(detect_scoring))
         // Add our projection system to run after
@@ -461,4 +463,15 @@ fn spawn_scoreboard(mut commands: Commands) {
         }),
         AiScore,
     ));
+}
+fn move_ai(
+    mut ai: Query<(&mut Velocity, &Position), With<Ai>>,
+    ball: Query<&Position, With<Ball>>,
+) {
+    if let Ok((mut velocity, position)) = ai.get_single_mut() {
+        if let Ok(ball_position) = ball.get_single() {
+            let a_to_b = ball_position.0 - position.0;
+            velocity.0.y = a_to_b.y.signum();
+        }
+    }
 }
